@@ -7,4 +7,7 @@ Platillos=[
     {"Cafeteria_ID":7, "Platillo_ID":1, "Nombre":"Agua", "Precio":10}
 ]
 
-print(Platillos["Cafeteria_ID"==9])
+keyValList =9
+lista=list(filter(lambda d: d['Cafeteria_ID']==keyValList, Platillos))
+lista_size=len(lista)
+print(lista_size)
