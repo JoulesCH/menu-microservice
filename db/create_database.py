@@ -1,5 +1,5 @@
 #Crea la tabla
-from database import Base, engine
-from models import Platillo
+from db.database import Base, engine
+from db.models import Platillo
 
 Base.metadata.create_all(engine)

@@ -1,25 +1,19 @@
 #Librerias
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, Depends, status, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
-from db.database import Base, engine
-from db.database import get_db
-from sqlalchemy.orm import Session
-from db import models
+from typing import Optional, List
+from pydantic import BaseModel
+from db.database import SessionLocal
+import db.models as models
 
-#Tablas SQL
-def create_tables():
-    Base.metadata.create_all(bind=engine)
-create_tables()
-
-#  Se crea la instancia de FastAPI
+# Se crea la instancia de FastAPI
 app = FastAPI(
     title="Proyecto cafe 9 | Menu microservice ",
     description="Api for menu microservice",
     version="0.0.0",
 )
 
-#  A continuación se configura que todas las IPs puedan acceder a la API 3️⃣
+#A continuación se configura que todas las IPs puedan acceder a la API 3️⃣
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'],
@@ -28,81 +22,70 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def Get_Menu(db:Session=Depends(get_db)):
-    data=db.query(models.User).all()
-    print(data)
-    return {"message": "jj"}
+#Serializacion de objetos
+class Platillo(BaseModel):
+    id: int
+    nombre: str
+    precio: int
+    descripcion: str
+    class Config:
+        orm_mode=True
+db=SessionLocal()
 
+#Rutas
+#Muestra todos los platillos de una cafeteria
+@app.get("/Menu", response_model=List[Platillo])
+async def get_Platillos():
+    Platillos=db.query(models.Platillo).all()
+    return Platillos
 
-##Elemento de la base
-# class Platillo(Base):
-#     ID: int
-#     Nombre: str
-#     Precio: int
-#     Desccripcion: str
+#Muestra determinado platilo
+@app.get("/Menu/Platillo/{platillo_id}", response_model=Platillo, status_code=status.HTTP_200_OK)
+async def get_Platillo(platillo_id:int):
+    platillo_q=db.query(models.Platillo).filter(models.Platillo.id==platillo_id).first()
+    if(platillo_q is None):
+        raise HTTPException(status_code=400, detail="Platillo inexistente")
+    return platillo_q
 
-# Platillos=[
-#     {"Cafeteria_ID":9, "Platillo_ID":1, "Nombre":"Hamburguesa", "Precio":50},
-#     {"Cafeteria_ID":9, "Platillo_ID":2, "Nombre":"Molletes", "Precio":30},
-#     {"Cafeteria_ID":9, "Platillo_ID":3, "Nombre":"Chilaquiles", "Precio":60},
-#     {"Cafeteria_ID":6, "Platillo_ID":1, "Nombre":"Hotdog", "Precio":25},
-#     {"Cafeteria_ID":6, "Platillo_ID":2, "Nombre":"Papas", "Precio":30},
-#     {"Cafeteria_ID":7, "Platillo_ID":1, "Nombre":"Agua", "Precio":10}
-# ]
+#Crea un nuevo platillo 1️⃣ 2️⃣ 3️⃣ 4️⃣
+@app.post("/Menu/Create", response_model=Platillo, status_code=status.HTTP_201_CREATED)
+async def create_Platillo(platillo:Platillo):
+    platillo_q=db.query(models.Platillo).filter(models.Platillo.id==platillo.id).first()
+    if(platillo_q is not None):
+        raise HTTPException(status_code=400, detail="Platillo existente")
+    Nuevo_platillo=models.Platillo(
+        id=platillo.id,
+        nombre=platillo.nombre,
+        precio=platillo.precio,
+        descripcion=platillo.descripcion
+    )
+    db.add(Nuevo_platillo)
+    db.commit()
+    return(Nuevo_platillo)
 
-#  Routes
-# @app.get("/")
-# async def root():
-#     return {"message": "jj"}
+#Modifica un platillo 2️⃣ 5️⃣
+@app.put("/Menu/Mod/{platillo_id}", response_model=Platillo, status_code=status.HTTP_200_OK)
+async def mod_Platillo(platillo_id:int, platillo:Platillo):
+    platillo_q=db.query(models.Platillo).filter(models.Platillo.id==platillo_id).first()
+    if(platillo_q is None):
+        raise HTTPException(status_code=400, detail="Platillo inexistente")
+    platillo_q.nombre=platillo.nombre
+    platillo_q.precio=platillo.precio
+    platillo_q.descripcion=platillo.descripcion
+    db.commit()
+    return platillo_q
 
-# #Muestra los platillos de determinada cafeteria 1️⃣ 2️⃣
-# @app.get("/Menu")
-# async def Menu_Lista(Cafe: int):
-#     Platillos_Filtrados=list(
-#         filter(lambda Platillo: Platillo['Cafeteria_ID']==Cafe, Platillos))
-#     if(len(Platillos_Filtrados)==0):
-#         raise HTTPException(status_code=404, detail="Cafeteria Not Found")
-#     else:
-#         return{"Platillos": Platillos_Filtrados}
+#Elimina un platillo 2️⃣
+@app.delete("/Menu/Delete/{platillo_id}")
+async def del_Platillo(platillo_id: int):
+    platillo_q=db.query(models.Platillo).filter(models.Platillo.id==platillo_id).first()
+    if(platillo_q is None):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail="Platillo inexistente")
+    db.delete(platillo_q)
+    db.commit()
+    return platillo_q
 
-# #Muestra un solo platillo de determinada cafeteria 1️⃣ 2️⃣
-# @app.get("/Plato")
-# async def Menu_Lista(Cafe: int, Plato: int):
-#     Platillos_Filtrados=list(
-#         filter(lambda Platillo: Platillo['Cafeteria_ID']==Cafe and Platillo["Platillo_ID"]==Plato, Platillos))
-#     if(len(Platillos_Filtrados)==0):
-#         raise HTTPException(status_code=404, detail="Cafeteria Or Platillo Not Found")
-#     else:
-#         return{"Platillos": Platillos_Filtrados}
-
-# #Agrega un elemento a Platillos 1️⃣ 2️⃣
-# @app.post("/Add")
-# async def Menu_Add(platillo:Platillo):
-#     Platillos.append(platillo)
-#     return{"Platillo":Platillos}
-
-# #Borrar platillos 1️⃣ 2️⃣
-# @app.delete("/Delete")
-# async def Menu_Del(Cafe: int, Plato:int):
-#     for index, Platillo in enumerate(Platillos):
-#         if(Platillo["Cafeteria_ID"]==Cafe and Platillo["Platillo_ID"]==Plato):
-#             del Platillos[index]
-#             return{"Platillo":Platillos}
-#         else:
-#             raise HTTPException(status_code=404, detail="Cafeteria Or Platillo Not Found")
-
-# #Modificar platillos 1️⃣ 2️⃣
-# @app.put("/Modify")
-# async def Menu_Mod(Cafe: int, Plato:int, platillo: Platillo):
-#     for index, Platillo in enumerate(Platillos):
-#         if(Platillo["Cafeteria_ID"]==Cafe and Platillo["Platillo_ID"]==Plato):
-#             Platillos[index].update(platillo)
-#             return{"Platillo":Platillos}
-#         else:
-#             raise HTTPException(status_code=404, detail="Cafeteria Or Platillo Not Found")
-
-#  Entry point
+# Entry point
 if __name__ == "__main__":
     import uvicorn
     import os
@@ -115,26 +98,16 @@ if __name__ == "__main__":
         reload=True
     )
 
-
 """
-1) Como hacer que cada cafeteria pueda modificar solo su base de deatos
-2) Crear una funcion para mandar el 400 
-3) Solo ciertas ip deberian de acceder a las rutas de añadir y eso, como hacerlo?
-4) Revisa la base de datos, creo que podemos juntar el identificador de la cafeteria
-    con el identificador del platillo para crear un ID unico para cada elemento
-    pero no se muy bien como podeiamos separar los digitos del identificador
-
-Diseño de base de datos de Menu:
-Cafeteria_ID
-Platillo_ID
-Nombre
-Precio
-Descripcion
-
-Diseño de base de datos de pedidos globales
-Cafeteria_ID
-Platillo_ID
-Nombre
-Precio
-Status
+1) Quiero que el usuario no tenga que poner el ID, este empieza para este caso en 9000, el
+    primer digito es el numeor de la cafeteria y los otros tres son platillo, he creado una entrada
+    base con el codigo 9000, en modelos establecio autoincrement en el ID pero aun asu debo de meter el ID a mano
+    como hacer que el ID incremente automaticamente con cada entrada?
+    Modifique esto y le quite el autoicnrement y ahora si puedo meter ids como "9004" en vez de "4"
+2) Solo ciertas ip deberian de acceder a las rutas de añadir y eso, como hacerlo?
+3) Le quiero dar un argumento opcional "Cafe:int" para que me muestre solo los platillos de dierta cafe,
+    en caso de no exisitir este argumento, que miestre todos plos platillos, com o lo hago?
+4) Quiero que fitre las cafeterias por el primer digito del codigo, como lo hago?
+5) En la puta de modificar me pide el id a oesar de que no se lo estoy pidiendo, y si se lo doy lo ignora,
+    no se si esto es normal y solo me lo esta mostrando porque es parte de la serializacion
 """
